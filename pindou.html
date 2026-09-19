@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>MARD拼豆库存｜图片转图纸（微信适配版）</title>
+    <style>
+        *{box-sizing:border-box;margin:0;padding:0;font-family:system-ui,-apple-system}
+        body{padding:12px;background:#f7f7f7}
+        .header{background:#ff9abc;color:white;padding:14px;border-radius:12px;margin-bottom:12px;text-align:center;font-weight:bold;font-size:18px}
+        .search{width:100%;padding:10px;border-radius:8px;border:1px solid #ddd;margin-bottom:12px;font-size:16px}
+        .control{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+        button{flex:1;padding:12px;border:none;border-radius:8px;color:white;font-size:15px;min-width:100px;touch-action:manipulation}
+        .export{background:#4285f4}
+        .import{background:#34a853}
+        .uploadBtn{background:#9340ff}
+        .resetBtn{background:#666}
+        .downloadBtn{background:#e64980}
+        .saveProjBtn{background:#2980b9}
+        .projBtn{background:#27ae60}
+        .drawBox{background:#fff;padding:12px;border-radius:10px;margin-bottom:12px}
+        .sizeCtrl{margin-bottom:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+        .sizeCtrl input{width:60px;padding:8px;font-size:16px;border:1px solid #ddd;border-radius:6px}
+        .selectColor{margin:8px 0}
+        #canvasContainer{overflow:auto;margin-top:10px;max-width:100%}
+        .stat{margin-top:10px;font-size:14px;line-height:1.6}
+        .warnRed{color:#d62828;font-weight:bold}
+        .item{background:#fff;padding:10px;border-radius:10px;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+        .low{background:#ffe8ec}
+        .colorName{flex:1;font-size:15px}
+        .numInput{width:70px;padding:8px;border:1px solid #ddd;border-radius:6px;text-align:center;font-size:16px}
+        .btnMin,.btnAdd{width:40px;height:40px;border-radius:6px;font-size:20px;padding:0}
+        .btnMin{background:#999}
+        .warnTip{font-size:12px;color:#e63946;margin-left:6px}
+        input[type="file"]{display:none}
+        .gridCell{width:24px;height:24px;border:1px solid #ddd;display:grid;place-items:center;font-size:9px;text-align:center;color:#222;cursor:pointer;-webkit-tap-highlight-color:transparent;}
+        .projectBox{background:#fff;padding:12px;border-radius:10px;margin-bottom:12px}
+        .projItem{padding:8px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center}
+        .colorPanel{display:flex;flex-wrap:wrap;gap:4px;margin:8px 0;max-height:120px;overflow:auto}
+        .colorChip{width:22px;height:22px;border:1px solid #666;cursor:pointer;font-size:8px;text-align:center;-webkit-tap-highlight-color:transparent;}
+        .tip{color:#666;font-size:13px;margin-top:8px}
+    </style>
+</head>
+<body>
+    <div class="header">MARD拼豆库存｜图片转图纸【微信适配版】</div>
+    <input class="search" id="search" placeholder="搜索MARD色号，例如A1、B3、R5" oninput="renderList()">
+    <div class="control">
+        <button onclick="exportData()" class="export">导出备份</button>
+        <button onclick="importData()" class="import">导入恢复</button>
+        <button onclick="document.getElementById('imgFile').click()" class="uploadBtn">上传图片生成图纸</button>
+        <input type="file" id="imgFile" accept="image/*">
+    </div>
+
+    <div class="drawBox">
+        <div class="sizeCtrl">
+            <span>图纸最大网格：</span>
+            <input id="maxSize" type="number" value="24" min="8" max="48">
+            <span>（建议16~32）</span>
+        </div>
+        <div class="selectColor">
+            <span>选中颜色（点击格子修改）：</span>
+            <select id="pickColor">
+            </select>
+        </div>
+        <div class="colorPanel" id="colorPanel"></div>
+        <div>图纸预览（点击格子切换颜色）：</div>
+        <div id="canvasContainer"></div>
+        <div class="stat" id="statText"></div>
+        <div class="tip">💡微信提示：生成图纸后点下载，长按弹出图片保存到相册</div>
+        <div class="control" style="margin-top:10px">
+            <button onclick="resetPaper()" class="resetBtn">重置图纸</button>
+            <button onclick="downloadPaper()" class="downloadBtn">生成图纸图片</button>
+            <button onclick="saveProject()" class="saveProjBtn">保存当前图纸项目</button>
+        </div>
+    </div>
+
+    <div class="projectBox">
+        <div>📁 已保存项目列表</div>
+        <div id="projectList"></div>
+        <div class="control" style="margin-top:8px">
+            <input id="projName" placeholder="项目名称（作品名）" style="flex:1;padding:8px">
+        </div>
+    </div>
+
+    <div id="listWrap"></div>
+    <input type="file" id="fileInput" style="display:none" accept=".json">
+    <canvas id="downloadCanvas" style="display:none"></canvas>
+    <img id="saveImg" style="max-width:100%;display:none;">
+
+<script>
+// ========== MARD 211色号清单 ==========
+const mardColorList = [
+"A1","A2","A3","A4","A5","A6","A7","A8","A9","A10","A11","A12","A13","A14","A15","A16","A17","A18","A19","A20","A21","A22","A23","A24","A25","A26",
+"B1","B2","B3","B4","B5","B6","B7","B8","B9","B10","B11","B12","B13","B14","B15","B16","B17","B18","B19","B20","B21","B22","B23","B24","B25","B26",
+"C1","C2","C3","C4","C5","C6","C7","C8","C9","C10","C11","C12","C13","C14","C15","C16","C17","C18","C19","C20","C21","C22","C23","C24","C25","C26","C27","C28","C29",
+"D1","D2","D3","D4","D5","D6","D7","D8","D9","D10","D11","D12","D13","D14","D15","D16","D17","D18","D19","D20","D21","D22","D23","D24","D25","D26",
+"E1","E2","E3","E4","E5","E6","E7","E8","E9","E10","E11","E12","E13","E14","E15","E16","E17","E18","E19","E20","E21","E22","E23","E24","E25",
+"F1","F2","F3","F4","F5","F6","F7","F8","F9","F10","F11","F12","F13","F14","F15","F16","F17","F18","F19","F20","F21","F22","F23","F24","F25",
+"G1","G2","G3","G4","G5","G6","G7","G8","G9","G10","G11","G12","G13","G14","G15","G16","G17","G18","G19","G20","G21",
+"H1","H2","H3","H4","H5","H6","H7","H8","H9","H10","H11","H12","H13","H14","H15","H16","H17","H18","H19","H20","H21","H22","H23",
+"M1","M2","M3","M4","M5","M6","M7","M8","M9","M10","M11","M12","M13","M14","M15",
+"P1","P2","P3","P4","P5","P6","P7","P8","P9","P10","P11","P12","P13","P14","P15","P16","P17","P18","P19","P20","P21","P22","P23",
+"Q1","Q2","Q3","Q4","Q5",
+"R1","R2","R3","R4","R5","R6","R7","R8","R9","R10","R11","R12","R13","R14","R15","R16","R17","R18","R19","R20","R21","R22","R23","R24","R25","R26","R27","R28",
+"Y1","Y2","Y3","Y4","Y5","Y6","Y7","Y8","Y9"
+];
+// 色库，后续可以手动替换真实MARD RGB
+let mardRgb = {};
+mardColorList.forEach((cid,idx)=>{
+    const h = (idx/mardColorList.length)*360;
+    const s=0.7;l=0.6;
+    const a = s*Math.min(l,1-l);
+    const f = n=>{
+        const k = (n+h/30)%12;
+        return l - a*Math.max(Math.min(k-3,9-k,1,-1),-1);
+    }
+    mardRgb[cid] = [Math.round(f(0)*255),Math.round(f(8)*255),Math.round(f(4)*255)]
+})
+
+let beanData = JSON.parse(localStorage.getItem('pinDouData')) || {};
+let projectList = JSON.parse(localStorage.getItem('pinDouProject')) || [];
+let currentGrid = []; //保存当前图纸网格
+let currentW=0,currentH=0;
+let selectColorId = mardColorList[0];
+
+//初始化库存
+for(const colorId of mardColorList){
+    if(!beanData[colorId]) beanData[colorId] = {name:`MARD-${colorId}`,count:0,warn:20}
+}
+function save(){
+    localStorage.setItem('pinDouData',JSON.stringify(beanData))
+    localStorage.setItem('pinDouProject',JSON.stringify(projectList))
+}
+
+//初始化下拉选色+色卡面板
+function initColorSelect(){
+    const sel = document.getElementById('pickColor');
+    const panel = document.getElementById('colorPanel');
+    sel.innerHTML = "";
+    panel.innerHTML = "";
+    mardColorList.forEach(cid=>{
+        let opt = document.createElement('option');
+        opt.value = cid;opt.innerText = cid;
+        sel.appendChild(opt);
+        const chip = document.createElement('div');
+        chip.className = "colorChip";
+        chip.style.background=`rgb(${mardRgb[cid].join(',')})`;
+        chip.innerText = cid;
+        chip.onclick = ()=>{
+            selectColorId = cid;
+            sel.value = cid;
+        }
+        panel.appendChild(chip);
+    })
+    sel.onchange=()=>selectColorId = sel.value;
+}
+
+// 找最接近MARD颜色
+function findClosestMard(r,g,b){
+    let bestId = mardColorList[0];
+    let minD = Infinity;
+    for(const cid of mardColorList){
+        const [tr,tg,tb] = mardRgb[cid];
+        const d = Math.sqrt((r-tr)**2+(g-tg)**2+(b-tb)**2);
+        if(d<minD){minD=d;bestId=cid}
+    }
+    return bestId;
+}
+
+//图片上传
+document.getElementById('imgFile').onchange = async function(e){
+    const file = e.target.files[0];
+    if(!file)return;
+    const img = new Image();
+    img.onload = ()=>{
+        const MAX = Number(document.getElementById('maxSize').value)||24;
+        let w = img.width, h = img.height;
+        const scale = Math.min(MAX/w,MAX/h);
+        const nw = Math.round(w*scale), nh=Math.round(h*scale);
+        currentW = nw; currentH = nh;
+        currentGrid = [];
+        const canvas = document.createElement('canvas');
+        canvas.width = nw; canvas.height = nh;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img,0,0,nw,nh);
+        const imgData = ctx.getImageData(0,0,nw,nh);
+        const pixels = imgData.data;
+        for(let y=0;y<nh;y++){
+            const row = [];
+            for(let x=0;x<nw;x++){
+                const i = (y*nw+x)*4;
+                const r=pixels[i],g=pixels[i+1],b=pixels[i+2];
+                const cid = findClosestMard(r,g,b);
+                row.push(cid);
+            }
+            currentGrid.push(row);
+        }
+        renderGrid();
+        calcCount();
+    }
+    img.src = URL.createObjectURL(file);
+}
+
+//渲染网格图纸，点击格子修改颜色
+function renderGrid(){
+    const container = document.getElementById('canvasContainer');
+    let html = `<div style="display:grid;grid-template-columns:repeat(${currentW},24px)">`;
+    for(let y=0;y<currentH;y++){
+        for(let x=0;x<currentW;x++){
+            const cid = currentGrid[y][x];
+            const [cr,cg,cb] = mardRgb[cid];
+            html += `<div class="gridCell" style="background:rgb(${cr},${cg},${cb})" onclick="changeCell(${x},${y})">${cid}</div>`;
+        }
+    }
+    html += `</div>`;
+    container.innerHTML = html;
+}
+//点击格子换色
+function changeCell(x,y){
+    currentGrid[y][x] = selectColorId;
+    renderGrid();
+    calcCount();
+}
+//统计用料清单
+function calcCount(){
+    const countMap = {};
+    for(let y=0;y<currentH;y++){
+        for(let x=0;x<currentW;x++){
+            const cid = currentGrid[y][x];
+            countMap[cid] = (countMap[cid]||0)+1;
+        }
+    }
+    let statTxt = "📋图纸用料清单：\n";
+    Object.entries(countMap).forEach(([cid,num])=>{
+        const stock = beanData[cid].count;
+        const needMore = stock < num;
+        statTxt += `${cid}：需要${num}颗｜现有${stock}颗 ${needMore?'<span class="warnRed">⚠缺豆子</span>':''}\n`
+    })
+    statTxt += `
+    <br>
+    <button onclick="subStock(${JSON.stringify(countMap)})">✅扣减库存</button>
+    <button onclick="addStock(${JSON.stringify(countMap)})">➕批量入库（新增豆子）</button>
+    `
+    document.getElementById('statText').innerHTML = statTxt;
+    return countMap;
+}
+
+//扣库存
+function subStock(countMap){
+    for(const [cid,num] of Object.entries(countMap)){
+        beanData[cid].count = Math.max(0, beanData[cid].count - num)
+    }
+    save();renderList();
+    alert("✅库存已扣除！");
+}
+//入库新增豆子
+function addStock(countMap){
+    for(const [cid,num] of Object.entries(countMap)){
+        beanData[cid].count += num
+    }
+    save();renderList();
+    alert("✅豆子入库成功！");
+}
+//重置图纸
+function resetPaper(){
+    document.getElementById('canvasContainer').innerHTML = "";
+    document.getElementById('statText').innerHTML = "";
+    currentGrid = [];
+    currentW=0;currentH=0;
+}
+//生成图片（微信适配：展示图片，长按保存）
+function downloadPaper(){
+    if(currentW===0) return alert("请先生成图纸！");
+    const dw = document.getElementById('downloadCanvas');
+    const saveImg = document.getElementById('saveImg');
+    const cellSize = 24;
+    dw.width = currentW*cellSize;
+    dw.height = currentH*cellSize;
+    const ctx = dw.getContext('2d');
+    ctx.clearRect(0,0,dw.width,dw.height);
+    for(let y=0;y<currentH;y++){
+        for(let x=0;x<currentW;x++){
+            const cid = currentGrid[y][x];
+            const [cr,cg,cb] = mardRgb[cid];
+            ctx.fillStyle = `rgb(${cr},${cg},${cb})`;
+            ctx.fillRect(x*cellSize,y*cellSize,cellSize-1,cellSize-1);
+            ctx.fillStyle="#000";
+            ctx.font="9px sans-serif";
+            ctx.fillText(cid,x*cellSize+2,y*cellSize+14);
+        }
+    }
+    saveImg.src = dw.toDataURL("image/png");
+    saveImg.style.display="block";
+    alert("✅图纸生成成功！长按下方图片保存到相册");
+}
+
+//项目保存、读取
+function saveProject(){
+    const name = document.getElementById('projName').value.trim() || "未命名作品";
+    const proj = {
+        name:name,
+        w:currentW,
+        h:currentH,
+        grid:currentGrid
+    }
+    projectList.push(proj);
+    save();
+    renderProjectList();
+    alert(`✅项目【${name}】保存成功`);
+}
+function loadProject(index){
+    const p = projectList[index];
+    currentW = p.w;
+    currentH = p.h;
+    currentGrid = p.grid;
+    renderGrid();
+    calcCount();
+}
+function delProject(index){
+    projectList.splice(index,1);
+    save();
+    renderProjectList();
+}
+function renderProjectList(){
+    const wrap = document.getElementById('projectList');
+    wrap.innerHTML = "";
+    projectList.forEach((p,i)=>{
+        const div = document.createElement('div');
+        div.className="projItem";
+        div.innerHTML = `<span>${p.name} (${p.w}×${p.h})</span>
+        <div>
+            <button onclick="loadProject(${i})" class="projBtn">加载</button>
+            <button onclick="delProject(${i})" style="background:#c0392b">删除</button>
+        </div>`
+        wrap.appendChild(div);
+    })
+}
+
+//渲染库存列表
+function renderList(){
+    const kw = document.getElementById('search').value.trim().toLowerCase()
+    const wrap = document.getElementById('listWrap')
+    wrap.innerHTML = ''
+    Object.entries(beanData).forEach(([k,item])=>{
+        const txt = `${k} ${item.name}`.toLowerCase()
+        if(kw && !txt.includes(kw)) return
+        const isLow = item.count <= item.warn
+        const div = document.createElement('div')
+        div.className = 'item' + (isLow?' low':'')
+        div.innerHTML = `
+            <div class="colorName">${item.name} ${isLow?'<span class="warnTip">⚠库存不足</span>':''}</div>
+            <button class="btnMin" onclick="changeNum('${k}',-1)">-</button>
+            <input class="numInput" value="${item.count}" onchange="setNum('${k}',this.value)">
+            <button class="btnAdd" onclick="changeNum('${k}',1)">+</button>
+        `
+        wrap.appendChild(div)
+    })
+}
+function changeNum(key,delta){
+    beanData[key].count = Math.max(0, beanData[key].count + delta)
+    save();renderList()
+}
+function setNum(key,val){
+    const v = parseInt(val)||0
+    beanData[key].count = Math.max(0,v)
+    save();renderList()
+}
+//导出备份json
+function exportData(){
+    const blob = new Blob([JSON.stringify({beanData,projectList},null,2)],{type:'application/json'})
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = 'MARD拼豆库存+项目备份.json'
+    a.click()
+}
+//导入备份
+function importData(){
+    document.getElementById('fileInput').onchange = async e=>{
+        const f = e.target.files[0]
+        const t = await f.text()
+        const obj = JSON.parse(t)
+        beanData = obj.beanData;
+        projectList = obj.projectList;
+        save();
+        renderList();
+        renderProjectList();
+        alert('✅导入成功！')
+    }
+    document.getElementById('fileInput').click()
+}
+
+//初始化
+initColorSelect();
+renderList();
+renderProjectList();
+</script>
+</body>
+</html>
